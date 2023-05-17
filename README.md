@@ -1,5 +1,8 @@
 # mastering-my-masterthesis
-Here is a collection of the codes i used and/or wrote for my master thesis project. It include scRNA sequecing analysis and multiplex Image analysis 
+Here is a collection of the codes i used and/or wrote for my master thesis project. It include scRNA sequecing analysis and multiplex Image analysis.
+
+To get a quick idea of what my master thesis project was, here is a quick summary: 
+... [put abstract here]
 
 If your my master thesis reviewer, thanks for coming to check my scripts. Here are some info to make it easier to find the information: 
 - You will find my full scripts for my scRNAseq re-analysis in: 
