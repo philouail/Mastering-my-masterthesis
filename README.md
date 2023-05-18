@@ -15,5 +15,5 @@ Lastly, I am quite the beginner and this was my first project ever. I appreciate
 The Seurat vignette on which my scNRA seq analysis workflow is based on can be found [here](https://satijalab.org/seurat/articles/integration_rpca.html)
 
 
-The Stardist extansion used for cell segmentation can be found [here](https://github.com/qupath/qupath-extension-stardist) 
+The Stardist extension used for cell segmentation can be found [here](https://github.com/qupath/qupath-extension-stardist) 
 
