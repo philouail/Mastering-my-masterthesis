@@ -1,0 +1,609 @@
+---
+title: "Master Thesis"
+author: "[Philippine Louail](https://github.com/philouail)"
+date: "`r Sys.Date()`"
+output: html_document 
+bibliography: packages.bib 
+nocite: '@*'
+---
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, results = 'hide') 
+```
+
+# 1. Packages
+
+The followings packages were used within this project:  
+
+```{r, echo=FALSE, results='markup'}
+package_list <- c("patchwork", "Seurat", "tidyverse","scales", "umap",
+                  "data.table", "scCustomize", "celldex", "SingleR", "viridis","ggplot2" ,"ggpubr", "bibtex" )
+for (p in package_list) {
+  library(p, character.only = TRUE, quietly= TRUE)
+  print(paste0(p, ", version used: ", packageVersion(p)))
+  }
+
+```
+
+# 2. Dataset 
+Two datasets were selected for this project based on their respective metadata information available.
+Metadata information needed were: 
+-Pathology status: Non-malignant or High-grade Serous ovarian cancer samples 
+-Location: Sample has to be taken from the ovary only
+-Patient information on: Age, menopause status, FIGO stage of the cancer. 
+
+The datasets were open individually and a Seurat object was created for each. The same selection thresholds were applied to both. 
+
+## 2.1. Xu et al. 2022 
+The matrix and metadata were separated for each individuals of the dataset. A "for loop" was build to quickly create a Seurat object that combine the count matrix and metadata of each patients. 
+
+### 2.1.1 First for the Cancer/maligant samples:
+```{r}
+setwd("GSE184880_XU/Cancer")
+ 
+listcsv <- dir(pattern = "*.csv")
+listdata <- dir(pattern = "*_GSM55992*" )
+
+for (k in 1:7){
+  datacancer <- Read10X(listdata[k])
+  meta<-  fread(listcsv[k])
+  cell_names <- data.frame(cell_label = colnames(datacancer),
+                           Sample_name = as.character(meta$Sample_name),
+                           stringsAsFactors = FALSE,
+                           row.names = colnames(datacancer))
+  meta$Sample_name <- as.character(meta$Sample_name)
+  meta_seurat <- left_join(x = cell_names,
+                           y = meta,
+                           by = "Sample_name")
+  stopifnot(all.equal(meta_seurat$cell_label, cell_names$cell_label))  
+  
+  rownames(meta_seurat) <- meta_seurat$cell_label
+  
+  mydata <- CreateSeuratObject(datacancer, min.cells = 10, 
+                               min.features = 500, 
+                               project = paste("XU_OC", k, sep="_"), 
+                               meta.data = meta_seurat)
+  saveRDS(mydata, file= paste("XU_SeuratObj", k , ".rds" , sep=""))
+}
+```
+
+There are `r length(listdata)` malignant individuals.
+
+```{r, echo=FALSE}
+gc()
+rm(list=ls())
+```
+
+The Seurat objects were then grouped together:
+```{r}
+setwd("GSE184880_XU/Cancer")
+
+XUSeuratlist <-list.files(pattern = ".rds") %>%
+            map(readRDS)
+XuSeurat<-Merge_Seurat_List(XUSeuratlist)
+XuSeurat[["percent.mt"]] <- PercentageFeatureSet(XuSeurat, pattern = "^MT-")
+```
+
+A quality control was performed: 
+```{r}
+VlnPlot(XuSeurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"),
+        ncol = 3)
+
+#subset QC
+XuSeurat <- subset(XuSeurat, subset = nFeature_RNA < 6000 & percent.mt < 25)
+
+saveRDS(XuSeurat,"Xu_SeuratObj_Cancer_SusbsetQC.rds")
+```
+```{r, echo=FALSE}
+gc()
+rm(list=ls())
+```
+ 
+### 2.1.2 A similar worlkflow was then performed for the non-malignant samples
+```{r}
+setwd("GSE184880_XU/Norm")
+#create a list 
+listcsv <- dir(pattern = "*.csv")
+listdata <- dir(pattern = "*_GSM55992*")
+
+#loop seurat object
+for (k in 1:5){
+  datacancer <- Read10X(listdata[k])
+  meta<-  fread(listcsv[k])
+  cell_names <- data.frame(cell_label = colnames(datacancer),
+                           Sample_name = as.character(meta$Sample_name),
+                           stringsAsFactors = FALSE,
+                           row.names = colnames(datacancer))
+  meta$Sample_name <- as.character(meta$Sample_name)
+  meta_seurat <- left_join(x = cell_names,
+                           y = meta,
+                           by = "Sample_name")
+  stopifnot(all.equal(meta_seurat$cell_label, cell_names$cell_label))  
+  
+  rownames(meta_seurat) <- meta_seurat$cell_label
+  
+  mydata <- CreateSeuratObject(datacancer, min.cells = 10, 
+                               min.features = 500, 
+                               project = paste("XU_OC", k, sep="_"), 
+                               meta.data = meta_seurat)
+  saveRDS(mydata, file= paste("XU_SeuratObj", k , ".rds" , sep=""))
+  
+}
+
+#create a common Seurat file
+XUSeuratlist <-list.files(pattern = ".rds") %>%
+  map(readRDS)
+XuSeurat<-Merge_Seurat_List(XUSeuratlist)
+
+#QC
+XuSeurat[["percent.mt"]] <- PercentageFeatureSet(XuSeurat, pattern = "^MT-")
+
+VlnPlot(XuSeurat, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"),
+        ncol = 3)
+
+#subset QC
+XuSeurat <- subset(XuSeurat, subset = nFeature_RNA > 200 & 
+                     nFeature_RNA < 6000 & percent.mt < 25)
+
+```
+
+```{r}
+saveRDS(XuSeurat,"Xu_SeuratObj_Norm_SusbsetQC.rds")
+```
+
+There is `r length(listdata)` non-malignant individuals. 
+
+```{r, echo=FALSE}
+gc()
+rm(list=ls())
+```
+
+
+## 2.2 Olbretch et al. 2021
+
+For this dataset, all the samples were pooled together. However, some did not match our selection criteria described above. It was therefore subsetted after the Seurat object was created. 
+
+```{r}
+setwd("EGAS00001004987_OLBRECHT")
+
+metaOB <- fread("2093-Olbrecht_metadata.csv")
+countOB <- readRDS("2095-Olbrecht_counts_matrix.rds")
+
+# we need to import the original metadata in order to identify the samples we want to keep
+# the following code is from the the original publication
+cell_names <- data.frame(cell_label = colnames(countOB),
+                         sample_name = sub(".*_(.*)",
+                                           "\\1",
+                                           colnames(countOB)),
+                         stringsAsFactors = FALSE,
+                         row.names = colnames(countOB))
+stopifnot(all(cell_names$sample_name %in% metaOB$sample_name))
+meta_seurat <- left_join(x = cell_names,
+                         y = as.data.frame(metaOB),
+                         by = "sample_name")
+
+# left_join preserves the order of cells:
+stopifnot(all.equal(meta_seurat$cell_label, cell_names$cell_label))
+
+#Seurat needs rownames to merge metadata and matrix: add cell labels as rownames
+rownames(meta_seurat) <- meta_seurat$cell_label
+
+#Create Seurat object 
+OLBRECHT <- CreateSeuratObject(countOB,
+                        project          = "Olbrecht_OC",
+                        min.cells        = 10,     # only genes > 10 cells
+                        min.genes        = 500,    # only cells with > 200 genes
+                        meta.data        = meta_seurat)
+```
+
+Before subsetting, the dataset has `r length(unique(metaOB$patient_id))` individuals and `r length(unique(metaOB$sample_name))` samples. 
+The samples of interest matching our metadata criteria were: OB_5, OB_8 and OB_9. 
+
+```{r}
+OLBRECHT_Seurat <- subset(OLBRECHT, ID == c("OB_5","OB_8","OB_9"))
+```
+
+This subsetted dataset had `r length(unique(OLBRECHT_Seurat$patient_id))` individuals and `r length(unique(OLBRECHT_Seurat$sample_name))` samples.
+
+Quality  control was then performed in a similar way as for the previous dataset 
+```{r}
+#adding percent.mt column to object
+OLBRECHT_Seurat[["percent.mt"]] <- PercentageFeatureSet(OLBRECHT_Seurat, 
+                                                        pattern = "^MT-")
+# Visualize QC metrics as a violin plot
+VlnPlot(OLBRECHT_Seurat, 
+        features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+
+#subset QC
+OLBRECHT_Seurat <- subset(OLBRECHT_Seurat, 
+                          subset = nFeature_RNA > 200 &
+                            nFeature_RNA < 6000 & 
+                            percent.mt < 25)
+saveRDS(OLBRECHT_Seurat,"Olbrecht_SeuratObj_SusbsetQC.rds")
+```
+
+```{r, echo=FALSE}
+gc()
+rm(list=ls())
+```
+
+# 3. Integration 
+
+The three datasets were then integrated together: 
+- Xu et al malignant samples 
+- Xu et al normal samples 
+- Olbrecht et al malignant + normal samples 
+
+First a list combining the datasets was created: 
+
+```{r}
+XuC<- readRDS("Xu_SeuratObj_Cancer_SusbsetQC.rds")
+XuN<- readRDS("Xu_SeuratObj_Norm_SusbsetQC.rds")
+OB<- readRDS("Olbrecht_SeuratObj_SusbsetQC.rds")
+Seuratlist <- list(OB, XuC, XuN)
+saveRDS(Seuratlist, "Integrated_SeuratObj.rds")
+```
+
+```{r, echo=FALSE}
+gc()
+rm(list=ls())
+```
+
+
+The "variable features" (genes) were identified and normalized.
+```{r}
+Seuratlist <- readRDS("Integrated_SeuratObj.rds")
+Seuratlist <- lapply(X = Seuratlist, FUN = function(x) {
+  x <- NormalizeData(x)
+  x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000)
+})
+```
+
+Then features that were repeatedly variable across datasets were selected as a basis for the integration and a PCA was ran using these features.
+```{r}
+features <- SelectIntegrationFeatures(object.list =Seuratlist)
+Seuratlist <- lapply(X = Seuratlist, FUN = function(x) {
+  x <- ScaleData(x, features = features, verbose = FALSE)
+  x <- RunPCA(x, features = features, verbose = FALSE)
+})
+
+anchors <- FindIntegrationAnchors(object.list = Seuratlist, 
+                                         anchor.features = features,
+                                         reduction = "rpca") #reciprocal PCA
+```
+
+Another assay was created within the Seurat object called 'integrated' and was set as default such that downstream analysis was performed on it. However, the original unmodified data was still available for downstream analysis under the 'RNA' assay.
+```{r}
+Seurat.combined <- IntegrateData(anchorset = anchors)
+DefaultAssay(Seurat.combined) <- "integrated"
+```
+
+The standard workflow for visualization and clustering was run on our integrated dataset.
+
+```{r}
+Seurat.combined <- ScaleData(Seurat.combined, verbose = FALSE)
+Seurat.combined <- RunPCA(Seurat.combined, npcs = 30, verbose = FALSE)
+Seurat.combined <- RunUMAP(Seurat.combined, reduction = "pca", dims = 1:30)
+Seurat.combined <- FindNeighbors(Seurat.combined, reduction = "pca", dims =1:30)
+Seurat.combined <- FindClusters(Seurat.combined, resolution = 0.5)
+
+saveRDS(Seurat.combined, "Seurat_combined_OB_XuC_XuN.rds")
+
+
+p1 <- DimPlot(Seurat.combined, reduction = "umap", group.by ="Pathology", cols = c('#de2d26', '#2632de'), label.size = 2)+ 
+  theme(text = element_text(size = 10)) 
+p2 <- DimPlot(Seurat.combined, reduction = "umap", group.by ="Dataset", cols = c('#de26d8','#dead26' ), label.size = 2)+ 
+  theme(text = element_text(size = 10)) 
+p3 <- DimPlot(Seurat.combined, reduction = "umap", group.by ="Menopause_status", cols = c("#26dbde" ,"#347d29"), label.size = 2)+ 
+  theme(text = element_text(size = 10)) 
+p4 <- DimPlot(Seurat.combined, reduction = "umap", group.by ="FIGO_stage", na.value= "#e6e3e3"  ,label.size = 2)+ 
+  theme(text = element_text(size = 10)) 
+p6 <- DimPlot(Seurat.combined, reduction = "umap", group.by ="ID", cols = c("#de26d8","#9b26de", "#8526de", heat.colors(12)), label.size = 2)+ 
+  theme(text = element_text(size = 10)) 
+
+```
+
+```{r, echo=FALSE, results='markup'}
+p2 + p6 
+
+
+```
+```{r, echo=FALSE, results='markup'}
+p1 + p4
+```
+```{r, echo=FALSE, results='markup'}
+p3
+```
+
+The integrated dataset was comprised of `r length(unique(Seurat.combined$ID))` patients,`r length(unique(Seurat.combined@assays[["RNA"]]@counts@Dimnames[[1]]))` genes and `r length(unique(Seurat.combined@assays[["RNA"]]@counts@Dimnames[[2]]))` cells in total. 
+
+```{r, echo=FALSE}
+gc()
+rm(list=ls())
+```
+
+# 4. Cluster identification 
+
+## 4.1 Unibased 
+Using the SingleR package an unbiased pheatmap was created displaying the possible identity of our clusters based on the Human primary cell atlas data available. This package used well-known marker from this reference dataset to assign identity to the clusters of our datasets
+
+```{r}
+Seurat.combined<- readRDS("Seurat_combined_OB_XuC_XuN.rds")
+
+ref.data <- celldex::HumanPrimaryCellAtlasData(ensembl=FALSE)
+prediction <- SingleR(test=Seurat.combined@assays$RNA@counts , ref= ref.data , 
+                      labels= ref.data$label.main)
+
+table(prediction$labels)
+
+unbiased.annotation <- table(cluster= Seurat.combined$seurat_clusters, 
+                             label=prediction$labels) 
+```
+
+```{r, results='markup'}
+pheatmap::pheatmap(log10(unbiased.annotation+10), width = 6, height = 6) 
+```
+
+The same protocol was run but this time using a Immune cell database
+```{r}
+ref.data <- celldex::DatabaseImmuneCellExpressionData(ensembl=FALSE)
+ref.data
+prediction.immune <- SingleR(test=Seurat.combined@assays$RNA@counts , ref= ref.data , labels= ref.data$label.main)
+table(prediction.immune$labels)
+immune.annotation <- table(cluster= Seurat.combined$seurat_clusters, label=prediction.immune$labels) 
+```
+
+```{r, results='markup'}
+pheatmap::pheatmap(log10(immune.annotation+10), width = 6, height = 6)
+```
+
+## 4.2 Biased identification 
+For biased cluster identification, vectors of well-known cell-type specific markers were create. 
+```{r}
+#Stroma
+Tumor_cell_marker <- c("EPCAM", "KRT7", "KRT18", "PAX8", "CD24")
+Endothelial_markers <- c("CLDN5", "PECAM1", "VWF", "CD34")
+Fibroblasts_markers <- c("COL1A1", "COL1A2","DCN", "COL3A1","FBN1")
+Epithelia <- c("CDH1","CLDN1","KRT6A","MUC1","KRT8")
+granulosa <- c("AMH", "HSD17B1",'CYP19A1' )
+mcaf <- c("THY1", "FAP", "PDGFRB")
+
+#Tcell refinment
+Tcell <- c("IL7R", "CCR7", "CD3E", "CD4", "CD8A","CTLA4","FOXP3","THEMIS")
+
+#Bcell&plasmacells
+Bcell <- c( "SDC1", "CD79A","CD38", "CD79B", "CD19", "IGHG3", "IGKC",
+            "JCHAIN", "VPREB3","IGLL5","CPNE5","MS4A1","JSRP1","RASSF6" )
+#monocyte
+Myeloid_cells<- c('CD68' ,'LYZ' ,'AIF1')
+macrophages <- c("CD14" , "CD163")
+
+NK<- c("KIR2DL4", "NCR1", 'KLRC1', 'KLRC3', "GNLY", "NKG7" )
+```
+
+And dotplots were ran and generated dot plots for each. Here are a few examples for mCAFs: 
+
+```{r, results='markup'}
+DotPlot(Seurat.combined,  features= mcaf,
+        assay = "RNA", 
+        cols =  c("cadetblue1", "darkcyan"), 
+        dot.min = 0.10,col.min = 0.5,dot.scale = 10)+ RotatedAxis() 
+
+DotPlot(Seurat.combined,  features= Tcell,
+        assay = "RNA", 
+        cols =  c("cadetblue1", "darkcyan"), 
+        dot.min = 0.10,col.min = 0.5,dot.scale = 10)+ RotatedAxis() 
+
+DotPlot(Seurat.combined,  features= Tumor_cell_marker,
+        assay = "RNA", 
+        cols =  c("cadetblue1", "darkcyan"), 
+        dot.min = 0.10,col.min = 0.5,dot.scale = 10)+ RotatedAxis() 
+
+DotPlot(Seurat.combined,  features= Bcell,
+        assay = "RNA", 
+        cols =  c("cadetblue1", "darkcyan"), 
+        dot.min = 0.10,col.min = 0.5,dot.scale = 10)+ RotatedAxis() 
+
+DotPlot(Seurat.combined,  features= macrophages,
+        assay = "RNA", 
+        cols =  c("cadetblue1", "darkcyan"), 
+        dot.min = 0.10,col.min = 0.5,dot.scale = 10)+ RotatedAxis() 
+
+```
+
+Both the combined the biased and unbiased approaches were combined to annotate the clusters and build this Umap: 
+
+```{r, echo=FALSE, results='markup', dpi = 200 }
+Seurat.combined <- RenameIdents(Seurat.combined,"0" = "Fibroblasts_nonmal", 
+                        "1" = "Tcells_CD8+", "2"="Tcells_CD4+",
+                        "3"="Myeloid_cells", "4"="Fibroblasts_nonmal" ,
+                        "5"="NK_cells","6"="Stroma","7"="Endothelial_cells", 
+                        "8"="Tumor_epithelial_cells", "9"="Double_neg_Tcells",
+                        "10"="Theca_cells", "11"= "Uncharacterized_Tcells", 
+                        "12"="mCAFs", "13"="PlasmaCells", "14"="Stroma",
+                        "15"="Tcells_CD8+_2","16"="Fibroblasts", 
+                        "17"="Tumor_epithelial_cells", "18"="Myeloid_cells", 
+                         "19"="Bcells", "20"="Tumor_epithelial_cells" , 
+                        "21"="Granulosa" , "22"="Stroma" , "23"="Myeloid_cells",
+                        "24"="mCAFs" ,"25"="Tumor_epithelial_cells" , 
+                        "26"="Endothelial_cells", "27"= "Uncharacterized")
+DimPlot(Seurat.combined, reduction = "umap" , label= TRUE, label.size= 2)
+
+```
+
+```{r, echo=FALSE}
+gc()
+rm(list=ls())
+```
+
+
+The Stroma ovarian being quite complex, the clusters for these cell types where harder to identify confidently. Moreover this project focused more toward immunophenotyping of HGSOC. 
+Immune cell clusters identification was therefore the priority, as well as mCAFs as they seem to have a role in how patients respond to immunotherapy. 
+
+```{r, echo=FALSE, results='markup', dpi = 200}
+Seurat.combined<- readRDS("Seurat_combined_OB_XuC_XuN.rds")
+Seurat.combined <- RenameIdents(Seurat.combined,"0" = "Stroma", 
+                          "1" = "Tcells_CD8+", "2" ="Tcells_CD4+",
+                          "3"="Myeloid_cells" ,"4"="Stroma" , 
+                          "5"="NK_cells", "6"="Stroma","7"="Stroma",
+                          "8"="Stroma", "9"="Double_neg_Tcells",
+                         "10"="Stroma", "11"= "Uncharacterized_Tcells",
+                         "12"="mCAFs", "13"="PlasmaCells", "14"="Stroma", 
+                         "15"="Tcells_CD8+_2", "16"="Stroma", "17"="Stroma", 
+                         "18"="Macrophages", "19"="Bcells", "20"="Stroma" , 
+                         "21"="Stroma" , "22"="Stroma" , "23"="Myeloid_cells" ,
+                         "24"="mCAFs" , "25"="Stroma" , "26"="Stroma", 
+                         "27"= "Uncharacterized")
+DimPlot(Seurat.combined, reduction = "umap" , label= TRUE, label.size= 2)
+
+
+```
+
+## 4.3 Panel building 
+
+A robust 9-plex IF antibody panel was built by combining information from multiple sources. Firstly, the internal antibody HPA database was utilized to identify potential targets. Additionally, existing literature on immunophenotyping and immunotherapy in cancer, specifically focusing on HGSOC, was reviewed. Finally, the scRNA-sequencing results were analyzed to further refine the panel. Through this process, a comprehensive panel for studying the spatial cell type/state-specific localization within ovarian tissue, specifically targeting the immune phenotype, was generated.
+
+```{r, echo=FALSE, results='markup'}
+panel <- c( "KRT7","PDGFRB", "CD8A" ,  "FOXP3", "CD79A", "CD163", "CD274")
+
+levels(Seurat.combined) <- c("Uncharacterized", "Myeloid_cells", "Macrophages",
+                             "NK_cells",  "Bcells","PlasmaCells","Tcells_CD4+", 
+                             "Tcells_CD8+", "Tcells_CD8+_2", 
+                             "Double_neg_Tcells", "Uncharacterized_Tcells", 
+                             "mCAFs", "Stroma" )
+
+DotPlot(Seurat.combined,  features= panel,
+        assay = "RNA", 
+        cols =  c("cadetblue1", "darkcyan"), 
+        dot.min = 0.10,col.min = 0.5,dot.scale = 10)+ RotatedAxis()
+
+```
+
+```{r, echo=FALSE}
+saveRDS(Seurat.combined, "Seurat_combined_OB_XuC_XuN.rds")
+gc()
+rm(list=ls())
+```
+## 4.4 Marker of interest in our datasets
+
+As I was building the panel I also searched for transcriptomic markers of interest that the scRNAseq re-analysis highlighted. These marker were meant to be used as "test-marker" in our 9-plex panel. 
+
+### 4.4.1 List creation 
+
+A "light" Seurat object was created based on internal HPA antibody list availability:
+
+```{r, results="hide"}
+Seurat.combined<- readRDS("Seurat_combined_OB_XuC_XuN.rds")
+
+gene <- fread("export_2023-02-14 10-19-20.xls")
+
+Antibodies <- gene %>% mutate_at(2, ~replace_na(.,0))%>%
+  filter(!Multi.targeting == "1" )%>%
+  filter (Reliability.Score=="4: High"
+          | Reliability.Score== "3: Medium"
+          | Reliability.Score== "2: Low"
+          | Reliability.Score== "1: Very low")
+
+genestokeep <- unique(Antibodies$Gene)
+
+#Antibodies <- Antibodies1 %>% distinct(Gene, .keep_all=TRUE)
+
+light.seurat <- subset(Seurat.combined, features = genestokeep)
+saveRDS(light.seurat, "light.seurat.rds") 
+
+
+
+```
+
+Within this list of validated HPA genes, a list of markers that were significantly different (Wilson cox statistical test) between different immune clusters was generated.
+
+```{r}
+clusters_of_interest <- c( "Tcells_CD8+", "Tcells_CD4+", "Myeloid_cells",
+                           "Macrophages", "Bcells", "mCAFs" , "PlasmaCells" )
+MasterList <- data.frame()
+for (g in clusters_of_interest) {
+  print(g)
+  Markers<- FindMarkers(light.seurat,
+                         ident.1 = g,
+                         only.pos = TRUE, min.pct=0.80,
+                         logfc.threshold = 0.25, test.use ="wilcox") 
+  Markers$Cell_type = g 
+  if (unique(Markers$Cell_type) == 1) {
+    MasterList<- Markers
+  } else {
+    MasterList <- bind_rows(MasterList, Markers)
+  }
+}
+
+MasterList$Gene <- rownames(MasterList)
+
+MasterList <- merge( MasterList[,-c(2,3,4, 5)],Antibodies %>% distinct(Gene, .keep_all=TRUE), by = "Gene")
+
+write.csv(MasterList, "MasterList_HGSOC.csv" , row.names = FALSE)
+
+```
+
+```{r, echo=FALSE}
+gc()
+rm(list=ls())
+```
+
+### 4.4.2 Selected for this project 
+In order to get a proof of concept for our new panel, the marker chosen from the list for this project were relatively well supported by the literature in the context of immunotherapy and/or HGSOC. 
+
+```{r, results='markup'}
+Seurat.combined<- readRDS("Seurat_combined_OB_XuC_XuN.rds")
+
+VlnPlot(Seurat.combined, assay = "RNA" , features = "CXCL13", 
+        split.by = "Pathology", idents= "Tcells_CD8+",
+        pt.size = 0) + DotPlot(Seurat.combined,  features= "CXCL13",
+        assay = "RNA", group.by = "Pathology", 
+        cols =  c("cadetblue1", "darkcyan"), 
+        dot.min = 0.10,col.min = 0.1,dot.scale = 10)+ RotatedAxis()
+
+VlnPlot(Seurat.combined, assay = "RNA" , features = "LILRB4", 
+        split.by = "Pathology", idents= c("Myeloid_cells", "Macrophages"),
+        pt.size = 0 ) + DotPlot(Seurat.combined,  features= "LILRB4",
+        assay = "RNA", group.by = "Pathology", 
+        cols =  c("cadetblue1", "darkcyan"), 
+        dot.min = 0.10,col.min = 0.1,dot.scale = 10)+ RotatedAxis()
+
+VlnPlot(Seurat.combined, assay = "RNA" , features = "SLAMF7", 
+        split.by = "Pathology", idents= c("Myeloid_cells", "PlasmaCells",  "Tcells_CD8+"),
+        pt.size = 0) + DotPlot(Seurat.combined,  features= "SLAMF7",
+        assay = "RNA", group.by = "Pathology", 
+        cols =  c("cadetblue1", "darkcyan"), 
+        dot.min = 0.10,col.min = 0.1,dot.scale = 10)+ RotatedAxis()
+
+
+VlnPlot(Seurat.combined, assay = "RNA" , features = "SOCS3", 
+        split.by = "Pathology", idents= c("Tcells_CD8+", "Tcells_CD4+", "Myeloid_cells",
+                           "Macrophages", "Bcells", "mCAFs" , "PlasmaCells" ),
+        pt.size = 0 ) + DotPlot(Seurat.combined,  features= "SOCS3",
+        assay = "RNA", group.by = "Pathology", 
+        cols =  c("cadetblue1", "darkcyan"), 
+        dot.min = 0.10,col.min = 0.1,dot.scale = 10)+ RotatedAxis()
+
+VlnPlot(Seurat.combined, assay = "RNA" , features = "GZMK", 
+        split.by = "Pathology", idents= c("Tcells_CD8+", "Tcells_CD4+", "Myeloid_cells"),
+        pt.size = 0 ) + DotPlot(Seurat.combined,  features= "GZMK",
+        assay = "RNA", group.by = "Pathology", 
+        cols =  c("cadetblue1", "darkcyan"), 
+        dot.min = 0.10,col.min = 0.1,dot.scale = 10)+ RotatedAxis()
+
+
+```
+
+```{r eval=FALSE, include=FALSE}
+filestoremove <- c("light.seurat.rds", "Xu_SeuratObj_Norm_SusbsetQC.rds", 
+                   "Xu_SeuratObj_Cancer_SusbsetQC.rds", "Olbrecht_SeuratObj_SusbsetQC.rds",
+                   "Integrated_SeuratObj.rds","Seurat_combined_OB_XuC_XuN.rds")
+for (f in filestoremove) {
+  file.remove(f)
+}
+```
+
+# References 
+```{r create_reference_list, include=FALSE}
+
+knitr::write_bib(x = .packages(), file = 'packages.bib')
+```
