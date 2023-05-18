@@ -6,7 +6,7 @@ To get a quick idea of what my master thesis project was, here is a quick summar
 
 If your my master thesis reviewer, thanks for coming to check my scripts. Here are some info to make it easier to find the information: 
 - You will find my full scripts for my scRNAseq re-analysis in: [scRNA_seq_analysis.Rmd](https://github.com/philouail/Mastering-my-masterthesis/blob/main/scRNA_seq_analysis.Rmd) or click [here](https://rpubs.com/philiiiii/1043127) to see the html version. 
-- You will find the Qupath and Stardist script in: 
+- You will find the Qupath and Stardist script in: [QuPath script](https://github.com/philouail/Mastering-my-masterthesis/tree/main/QuPath_work)
 - You will find the downstream image/statistical analysis here: [Image_analysis.Rmd](https://github.com/philouail/Mastering-my-masterthesis/blob/main/Image_analysis.Rmd)
 
 If you visitor has any question on my code or wish to disucs anything and how it could help you don't hesistate to contact me. 
