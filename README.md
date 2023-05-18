@@ -5,7 +5,7 @@ To get a quick idea of what my master thesis project was, here is a quick summar
 "We developed a 9-plex immunofluorescence panel using the Opal™ system and quantitative analysis to evaluate the expression of PD-L1, CD8A, FoxP3, CD163, KRT7, PDGFRB, and CD79A in whole ovarian cancer tissues. An additional slot was left to test new markers with little to no literature describing them in HGSOC. Therefore, in this project, we tested GZMK and SLAMF7 within this multiplex panel to learn more about their expression pattern in the immune environment in the context of HGSOC."
 
 If your my master thesis reviewer, thanks for coming to check my scripts. Here are some info to make it easier to find the information: 
-- You will find my full scripts for my scRNAseq re-analysis in: [scRNA_seq_analysis.Rmd](https://github.com/philouail/Mastering-my-masterthesis/blob/main/scRNA_seq_analysis.Rmd) or click [here](https://github.com/philouail/Mastering-my-masterthesis/blob/main/Full_work.html "download") to see the html version. 
+- You will find my full scripts for my scRNAseq re-analysis in: [scRNA_seq_analysis.Rmd](https://github.com/philouail/Mastering-my-masterthesis/blob/main/scRNA_seq_analysis.Rmd) or click [here](download= https://github.com/philouail/Mastering-my-masterthesis/Full_work.html) to see the html version. 
 - You will find the Qupath and Stardist script in: 
 - You will find the downstream image/statistical analysis here: [Image_analysis.Rmd](https://github.com/philouail/Mastering-my-masterthesis/blob/main/Image_analysis.Rmd)
 
