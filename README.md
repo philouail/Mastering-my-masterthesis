@@ -12,7 +12,7 @@ If you are my master thesis reviewer, thanks for coming to check my scripts. Her
 If you, a lucky visitor, has any question on my code or wish to discuss anything and how it could help you don't hesistate to contact me. 
 Lastly, I am quite the beginner and this was my first project ever. I appreciate any feedback and anything you have to teach me. 
 
-The Seurat vignette on which my scNRA seq analysis workflow is based on can be found [here](https://satijalab.org/seurat/articles/integration_rpca.html)
+The Seurat vignette on which my scNRA seq analysis workflow is based can be found [here](https://satijalab.org/seurat/articles/integration_rpca.html)
 
 
 The Stardist extension used for cell segmentation can be found [here](https://github.com/qupath/qupath-extension-stardist) 
