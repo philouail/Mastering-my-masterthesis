@@ -514,7 +514,7 @@ saveRDS(light.seurat, "light.seurat.rds")
 
 ```
 
-Within this list of validated HPA genes, a list of markers that were significantly different (Wilson cox statistical test) between different immune clusters was generated.
+Within this list of validated HPA genes, a list of markers that were significantly different (Wilcoxon statistical test) between different immune clusters was generated.
 
 ```{r}
 clusters_of_interest <- c( "Tcells_CD8+", "Tcells_CD4+", "Myeloid_cells",
